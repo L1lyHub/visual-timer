@@ -34,7 +34,7 @@
   /* サイズ可変: --u は「設計上の1px」。基準サイズ(幅560px)を1として、
      ウィンドウの幅・高さのどちらにも収まる範囲で等倍拡大する。1px未満にはしない(=最小が基準サイズ) */
   --base-w: 560;      /* 基準サイズの幅 */
-  --base-h: 519;      /* 基準サイズの高さ(ラベル〜ヒントまで) */
+  --base-h: 577;      /* 基準サイズの高さ(ラベル〜ヒントまで) */
   --side: 160px;      /* 左右に残す余白(縦長バナー1個分) */
   --u: max(1px, min((100vw - var(--side) * 2) / var(--base-w), (100vh - 48px) / var(--base-h)));
 }
@@ -85,12 +85,20 @@ body {
   display: flex; gap: calc(3 * var(--u));
   transition: background-color .4s;
 }
-.seg { flex: 1 1 0; min-width: 0; background: var(--seg-on); border-radius: calc(1.5 * var(--u)); transition: background-color .3s, opacity .3s; }
-.seg.off { background: var(--seg-off); }
+/* 1本のメモリ: 土台はいつも「消えた色」で、その上に重ねた「点いた色」の濃さ(--lit: 0〜1)だけを変える。
+   色と濃さを同時に切り替えると、消える瞬間に一瞬明るく(暗く)なるため */
+.seg {
+  flex: 1 1 0; min-width: 0; position: relative;
+  background: var(--seg-off); border-radius: calc(1.5 * var(--u)); transition: background-color .3s;
+}
+.seg::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: var(--seg-on); opacity: var(--lit, 1); transition: background-color .3s, opacity .3s;
+}
 /* 休憩中: 作業中と同じ見た目のまま、色を変えて左から増えていく */
 .meter.recover { background: var(--rest-well); }
-.meter.recover .seg { background: var(--accent); }
-.meter.recover .seg.off { background: var(--rest-off); }
+.meter.recover .seg { background: var(--rest-off); }
+.meter.recover .seg::before { background: var(--accent); }
 .scale {
   display: flex; justify-content: space-between; align-items: baseline; margin-top: calc(-12 * var(--u));
   font-family: var(--font-num); font-size: calc(11 * var(--u)); color: var(--muted);
@@ -114,23 +122,31 @@ body {
 }
 .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .btn:hover { filter: brightness(1.06); }
-.btn:focus-visible, .theme-btn:focus-visible, .mode-btn:focus-visible, .step-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:focus-visible, .theme-btn:focus-visible, .choice-btn:focus-visible, .step-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* 設定: モード(通常／繰り返し)と時間。実行中はロックして、値と今の区間だけを見せる */
-.config {
-  margin: 0; min-width: 0;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: calc(10 * var(--u)) calc(14 * var(--u));
+/* 設定のカード: 上の段がモードと時間(実行中はロック)、下の段が音と振動(いつでも変えられる) */
+.settings {
+  display: grid; gap: calc(10 * var(--u));
   background: var(--panel); border: 1px solid var(--line); border-radius: calc(14 * var(--u));
   padding: calc(10 * var(--u)) calc(12 * var(--u));
 }
-.modes { display: inline-flex; background: var(--well); border-radius: 999px; padding: calc(3 * var(--u)); }
-.mode-btn {
+/* モード(通常／繰り返し)と時間。実行中はロックして、値と今の区間だけを見せる */
+.config, .prefs {
+  margin: 0; padding: 0; border: 0; min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: calc(10 * var(--u)) calc(14 * var(--u));
+}
+.prefs { border-top: 1px solid var(--line); padding-top: calc(10 * var(--u)); }
+.pref { display: flex; align-items: center; gap: calc(8 * var(--u)); }
+.pref-label { font-size: calc(13 * var(--u)); font-weight: 700; color: var(--muted); white-space: nowrap; }
+/* 選択肢のボタンの組（モード・音量・振動） */
+.choice { display: inline-flex; background: var(--well); border-radius: 999px; padding: calc(3 * var(--u)); }
+.choice-btn {
   font: inherit; font-size: calc(13 * var(--u)); font-weight: 700; color: var(--muted);
   background: none; border: 0; border-radius: 999px; cursor: pointer;
   padding: calc(6 * var(--u)) calc(13 * var(--u));
 }
-.mode-btn[aria-pressed="true"] { background: var(--panel); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.choice-btn[aria-pressed="true"] { background: var(--panel); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 .fields { display: flex; gap: calc(10 * var(--u)); }
 .field {
   display: flex; align-items: center; gap: calc(6 * var(--u));
@@ -160,16 +176,17 @@ body {
 .step-btn:hover { background: var(--well); }
 .num-in {
   font-family: var(--font-num); font-size: calc(16 * var(--u)); color: var(--fg);
-  width: 3ch; text-align: center; border: 0; background: none; padding: 0; margin: 0; outline: none;
+  width: 3ch; text-align: center; border: 0; background: none; padding: 0; margin: 0; outline: none;   /* 上限の桁数の幅で固定 */
   -moz-appearance: textfield; appearance: textfield;
   opacity: 1; -webkit-text-fill-color: currentColor;
 }
+.num-in.short { width: 2ch; }   /* 繰り返しの作業・休憩（60分まで） */
 .num-in::-webkit-inner-spin-button, .num-in::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .unit { font-size: calc(12 * var(--u)); color: var(--muted); margin-left: calc(3 * var(--u)); }
 .config:disabled .step-btn { display: none; }
 .config:disabled .stepper { border-color: transparent; padding-inline: calc(4 * var(--u)); }
-.config:disabled .mode-btn { cursor: default; }
-.config:disabled .mode-btn[aria-pressed="false"] { opacity: .4; }
+.config:disabled .choice-btn { cursor: default; }
+.config:disabled .choice-btn[aria-pressed="false"] { opacity: .4; }
 .field.active { background: var(--well); }
 .field.active .field-label { color: var(--fg); }
 .field.rest.active { background: var(--rest-well); }
@@ -177,7 +194,8 @@ body {
 
 .hint { text-align: center; font-size: calc(12 * var(--u)); color: var(--muted); }
 .hint .keys + #lockNote::before { content: "　·　"; }
-button { touch-action: manipulation; }   /* 続けてタップしても拡大しない */
+/* 続けてタップしても拡大しない。長押ししても文字の選択やメニューを出さない */
+button { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* タッチの端末(スマホなど)ではキーの案内を出さず、ロックの案内だけにする(行の高さは変えない) */
 @media (hover: none) and (pointer: coarse) {
   .hint { min-height: 1.5em; line-height: 1.5; }
@@ -187,7 +205,7 @@ button { touch-action: manipulation; }   /* 続けてタップしても拡大し
 kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px solid var(--line); border-radius: calc(4 * var(--u)); padding: calc(1 * var(--u)) calc(5 * var(--u)); }
 /* 1行に収まらない幅では、モードと時間を常に2段にする(ロックの有無で段数を変えない) */
 @media (max-width: 580px) {
-  .config { flex-direction: column; }
+  .config, .prefs { flex-direction: column; }
   /* 狭い画面では、ロック中はキーの案内の代わりにロックの案内を出す(行数を変えない) */
   .hint.locked .keys { display: none; }
   .hint.locked #lockNote::before { content: none; }
@@ -197,7 +215,7 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
   .meter { height: 76px; padding: 8px; gap: 2px; }
   .field { flex-direction: column; gap: 2px; padding: 4px 6px 2px; }
 }
-@media (prefers-reduced-motion: reduce) { .seg, .time, .meter, .field { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .seg, .seg::before, .time, .meter, .field { transition: none; } }
 </style>
 
 <div class="app" id="app">
@@ -217,10 +235,11 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     </div>
   </div>
 
+  <div class="settings">
   <fieldset class="config" id="config" aria-label="タイマーの設定">
-    <div class="modes" role="group" aria-label="モード">
-      <button class="mode-btn" type="button" data-mode="single" aria-pressed="true">通常</button>
-      <button class="mode-btn" type="button" data-mode="repeat" aria-pressed="false">繰り返し</button>
+    <div class="choice" role="group" aria-label="モード">
+      <button class="choice-btn" type="button" data-mode="single" aria-pressed="true">通常</button>
+      <button class="choice-btn" type="button" data-mode="repeat" aria-pressed="false">繰り返し</button>
     </div>
     <div class="fields">
       <div class="field" data-show="single">
@@ -236,7 +255,7 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
         <label class="field-label" for="inA"><span class="tag">A</span>作業</label>
         <div class="stepper">
           <button class="step-btn" type="button" data-key="a" data-dir="-1" aria-label="作業の時間を減らす">−</button>
-          <input class="num-in" id="inA" data-key="a" type="number" inputmode="numeric" min="1" max="180" step="1" value="25">
+          <input class="num-in short" id="inA" data-key="a" type="number" inputmode="numeric" min="1" max="60" step="1" value="25">
           <span class="unit">分</span>
           <button class="step-btn" type="button" data-key="a" data-dir="1" aria-label="作業の時間を増やす">+</button>
         </div>
@@ -245,25 +264,50 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
         <label class="field-label" for="inB"><span class="tag">B</span>休憩</label>
         <div class="stepper">
           <button class="step-btn" type="button" data-key="b" data-dir="-1" aria-label="休憩の時間を減らす">−</button>
-          <input class="num-in" id="inB" data-key="b" type="number" inputmode="numeric" min="1" max="180" step="1" value="5">
+          <input class="num-in short" id="inB" data-key="b" type="number" inputmode="numeric" min="1" max="60" step="1" value="5">
           <span class="unit">分</span>
           <button class="step-btn" type="button" data-key="b" data-dir="1" aria-label="休憩の時間を増やす">+</button>
         </div>
       </div>
     </div>
   </fieldset>
+  <div class="prefs" id="prefs">
+    <div class="pref">
+      <span class="pref-label" id="volLabel">音</span>
+      <div class="choice" role="group" aria-labelledby="volLabel">
+        <button class="choice-btn" type="button" data-vol="0" aria-pressed="false">消音</button>
+        <button class="choice-btn" type="button" data-vol="1" aria-pressed="false">小</button>
+        <button class="choice-btn" type="button" data-vol="2" aria-pressed="true">中</button>
+        <button class="choice-btn" type="button" data-vol="3" aria-pressed="false">大</button>
+      </div>
+    </div>
+    <!-- 振動できる端末（Android など）のときだけ出す -->
+    <div class="pref" id="vibPref" hidden>
+      <span class="pref-label" id="vibLabel">振動</span>
+      <div class="choice" role="group" aria-labelledby="vibLabel">
+        <button class="choice-btn" type="button" data-vib="1" aria-pressed="true">オン</button>
+        <button class="choice-btn" type="button" data-vib="0" aria-pressed="false">オフ</button>
+      </div>
+    </div>
+  </div>
+  </div>
 
-  <div class="hint" id="hint"><span class="keys"><kbd>Space</kbd> スタート／一時停止　<kbd>R</kbd> リセット</span><span id="lockNote" hidden>設定の変更はリセット後にできます</span></div>
+  <div class="hint" id="hint"><span class="keys"><kbd>Space</kbd> スタート／一時停止　<kbd>R</kbd> リセット</span><span id="lockNote" hidden>時間とモードの変更はリセット後にできます</span></div>
 </div>
 
 <script>
 (() => {
-  const MIN_MIN = 1, MAX_MIN = 180;          // 設定できる時間（分）
+  // 設定できる時間（分）。通常は180分まで、繰り返しは作業・休憩とも60分まで
+  const MIN_MIN = 1, MAX_MIN = { single: 180, a: 60, b: 60 };
   // メモリの数は画面の大きさで決める（時間には関係しない。設定した時間で減る速さが変わる）。
   // 基準サイズでは1本の間隔を約16.5px（30本）にし、拡大したときは間隔を√倍にして、大きい画面ほど本数を増やす
   const BASE_W = 560, SEG_PITCH = 16.5, MIN_SEGS = 12, MAX_SEGS = 60;
   const NOTES_DONE = [880, 880, 1046.5];     // 時間になった・作業が終わった
   const NOTES_BACK = [659.3, 784, 987.8];    // 休憩が終わった（作業に戻る）
+  const VOLUMES = [0, 0.08, 0.25, 0.6];      // 音の大きさ: 消音・小・中・大
+  const VIB_DONE = 200, VIB_BACK = [120, 100, 120];   // 振動（ミリ秒）: 作業の終わり・休憩の終わり
+  const AUTO_PAUSE = 5;                      // 繰り返しはこの回数ごとに一時停止する（画面がつけっぱなしにならないように）
+  const canVibrate = 'vibrate' in navigator && matchMedia('(pointer: coarse)').matches;   // iPhone のブラウザは振動できない
   const CFG_KEY = 'visual-timer-settings', THEME_KEY = 'visual-timer-theme', OLD_THEME_KEY = 'pomo-theme';
 
   const $ = id => document.getElementById(id);
@@ -273,7 +317,11 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
   const labelEl = $('label'), config = $('config'), hintEl = $('hint'), lockNote = $('lockNote');
   const fieldA = $('fieldA'), fieldB = $('fieldB');
   const inputs = { single: $('inSingle'), a: $('inA'), b: $('inB') };
-  const modeBtns = [...document.querySelectorAll('.mode-btn')];
+  const modeBtns = [...document.querySelectorAll('[data-mode]')];
+  const prefsEl = $('prefs'), vibPref = $('vibPref');
+  const volBtns = [...document.querySelectorAll('[data-vol]')], vibBtns = [...document.querySelectorAll('[data-vib]')];
+
+  const clampMin = (key, v) => Math.min(MAX_MIN[key], Math.max(MIN_MIN, Math.round(v)));
 
   // 設定（mode: single = 通常、repeat = A（作業）と B（休憩）の繰り返し）
   const cfg = loadCfg();
@@ -286,7 +334,6 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
   let segs = [];
   let audioCtx = null, wakeLock = null;
 
-  const clampMin = v => Math.min(MAX_MIN, Math.max(MIN_MIN, Math.round(v)));
   const fmt = ms => {
     const t = Math.ceil(ms / 1000);
     return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
@@ -332,9 +379,9 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     const full = Math.floor(n + 1e-9);          // 完全に点いているメモリ数
     const frac = n - full;                      // 途中のメモリの点いている割合
     segs.forEach((s, i) => {
-      if (i < full) { s.classList.remove('off'); s.style.opacity = 1; }
-      else if (i === full && frac > 1e-9) { s.classList.remove('off'); s.style.opacity = 0.25 + 0.75 * frac; }
-      else { s.classList.add('off'); s.style.opacity = 1; }
+      const lit = i < full ? 1 : i === full && frac > 1e-9 ? 0.25 + 0.75 * frac : 0;
+      s.style.setProperty('--lit', lit);
+      s.classList.toggle('off', lit === 0);
     });
   }
 
@@ -367,15 +414,9 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
   function renderConfig() {
     modeBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === cfg.mode)));
     document.querySelectorAll('[data-show]').forEach(el => { el.hidden = el.dataset.show !== cfg.mode; });
-    for (const k in inputs) {
-      if (document.activeElement !== inputs[k]) inputs[k].value = cfg[k];
-      fitInput(inputs[k]);
-    }
+    for (const k in inputs) if (document.activeElement !== inputs[k]) inputs[k].value = cfg[k];
     labelEl.textContent = 'VISUAL TIMER · ' + (cfg.mode === 'repeat' ? cfg.a + ' / ' + cfg.b : cfg.single) + ' MIN';
   }
-
-  // 入力欄の幅を桁数に合わせる（ロック中に値だけを詰めて見せるため）
-  const fitInput = el => { el.style.width = Math.min(3, Math.max(2, el.value.length)) + 'ch'; };
 
   function enterPhase(p) {
     phase = p;
@@ -389,13 +430,18 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     const now = Date.now();
     if (cfg.mode === 'repeat' && endAt <= now) {
       // 区間の切り替え。タブが眠っていて何区間か過ぎていても、終わるはずだった時刻から数えて進める
+      let stop = false;
       while (endAt <= now) {
-        if (phase === 'b') cycle++;
+        if (phase === 'b') {
+          stop = cycle % AUTO_PAUSE === 0;   // 決まった回数の休憩が終わったら、次の作業の最初で止める
+          cycle++;
+        }
         enterPhase(phase === 'a' ? 'b' : 'a');
+        if (stop) break;
         endAt += total;
       }
-      if (phase === 'b') chime(NOTES_DONE);
-      else chime(NOTES_BACK, 0.22);
+      notify(phase === 'b' ? 'done' : 'back');
+      if (stop) { autoPause(); return; }
       runningStatus();
     }
     remaining = Math.max(0, endAt - now);
@@ -431,6 +477,17 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     render();
   }
 
+  // 繰り返しで決まった回数を終えたとき。次の作業の最初で一時停止する（画面のスリープも戻す）
+  function autoPause() {
+    state = 'paused';
+    clearInterval(timer);
+    remaining = total;
+    startBtn.textContent = '再開';
+    setStatus((cycle - 1) + '回終わったので一時停止', true);
+    releaseWake();
+    render();
+  }
+
   function reset() {
     state = 'idle';
     clearInterval(timer);
@@ -438,7 +495,7 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     enterPhase(cfg.mode === 'repeat' ? 'a' : 'single');
     remaining = total;
     startBtn.textContent = 'スタート';
-    setStatus(cfg.mode === 'repeat' ? 'スタートで A（作業）から始めます' : 'スタートで開始します');
+    setStatus(cfg.mode === 'repeat' ? 'Aから開始 · ' + AUTO_PAUSE + '回ごとに一時停止' : 'スタートで開始します');
     lock(false);
     releaseWake();
     render();
@@ -453,10 +510,10 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     document.title = '完了 · ビジュアルタイマー';
     lock(false);
     releaseWake();
-    chime(NOTES_DONE);
+    notify('done');
   }
 
-  // 実行中・一時停止中は設定を変えられない（リセットか終了で戻る）
+  // 実行中・一時停止中は時間とモードを変えられない（リセットか終了で戻る）。音と振動はいつでも変えられる
   function lock(on) {
     config.disabled = on;
     config.title = on ? '実行中は変更できません（リセットすると変更できます）' : '';
@@ -476,43 +533,44 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     cfg[key] = v;
     applySettings();
   }
-  // −／+: 10分までは1分きざみ、それより上は5分きざみ（5の倍数にそろえる）
-  function stepValue(v, dir) {
-    if (dir > 0) return clampMin(v < 10 ? v + 1 : Math.floor(v / 5) * 5 + 5);
-    return clampMin(v <= 10 ? v - 1 : Math.ceil(v / 5) * 5 - 5);
+  // −／+: 10分までは1分、100分までは5分、それより上は10分きざみ（きざみの倍数にそろえる）
+  function stepValue(key, v, dir) {
+    if (dir > 0) return clampMin(key, v < 10 ? v + 1 : v < 100 ? Math.floor(v / 5) * 5 + 5 : Math.floor(v / 10) * 10 + 10);
+    return clampMin(key, v <= 10 ? v - 1 : v <= 100 ? Math.ceil(v / 5) * 5 - 5 : Math.ceil(v / 10) * 10 - 10);
   }
   config.addEventListener('click', e => {
     const step = e.target.closest('.step-btn');
-    if (step) { setValue(step.dataset.key, stepValue(cfg[step.dataset.key], Number(step.dataset.dir))); return; }
-    const mode = e.target.closest('.mode-btn');
+    if (step) { setValue(step.dataset.key, stepValue(step.dataset.key, cfg[step.dataset.key], Number(step.dataset.dir))); return; }
+    const mode = e.target.closest('[data-mode]');
     if (mode && mode.dataset.mode !== cfg.mode) { cfg.mode = mode.dataset.mode; applySettings(); }
   });
   for (const [k, el] of Object.entries(inputs)) {
     // 入力の途中でも、範囲内の整数になったら反映する
     el.addEventListener('input', () => {
-      fitInput(el);
       const v = Number(el.value);
-      if (el.value !== '' && Number.isInteger(v) && v >= MIN_MIN && v <= MAX_MIN) setValue(k, v);
+      if (el.value !== '' && Number.isInteger(v) && v >= MIN_MIN && v <= MAX_MIN[k]) setValue(k, v);
     });
     // 確定したら範囲に収める（空や不正な値は元に戻す）
     el.addEventListener('change', () => {
       const v = Number(el.value);
-      if (el.value !== '' && Number.isFinite(v)) setValue(k, clampMin(v));
+      if (el.value !== '' && Number.isFinite(v)) setValue(k, clampMin(k, v));
       el.value = cfg[k];
-      fitInput(el);
     });
     el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); });
   }
 
   function loadCfg() {
-    const d = { mode: 'single', single: 30, a: 25, b: 5 };
+    const d = { mode: 'single', single: 30, a: 25, b: 5, vol: 2, vib: true };
     try {
       const s = JSON.parse(localStorage.getItem(CFG_KEY) || 'null');
       if (s && typeof s === 'object') {
         if (s.mode === 'single' || s.mode === 'repeat') d.mode = s.mode;
+        // 上限を超えた値（上限を下げる前に保存したもの）は上限にする
         for (const k of ['single', 'a', 'b']) {
-          if (Number.isInteger(s[k]) && s[k] >= MIN_MIN && s[k] <= MAX_MIN) d[k] = s[k];
+          if (Number.isInteger(s[k]) && s[k] >= MIN_MIN) d[k] = clampMin(k, s[k]);
         }
+        if (VOLUMES[s.vol] !== undefined && Number.isInteger(s.vol)) d.vol = s.vol;
+        if (typeof s.vib === 'boolean') d.vib = s.vib;
       }
     } catch (e) {}
     return d;
@@ -529,7 +587,8 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     } catch (e) { audioCtx = null; }
   }
   function chime(notes, gap = 0.35) {
-    if (!audioCtx) return;
+    const peak = VOLUMES[cfg.vol];
+    if (!audioCtx || !peak) return;
     const now = audioCtx.currentTime;
     notes.forEach((f, i) => {
       const d = i * gap;
@@ -537,12 +596,43 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
       o.type = 'sine';
       o.frequency.value = f;
       g.gain.setValueAtTime(0.0001, now + d);
-      g.gain.exponentialRampToValueAtTime(0.25, now + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(peak, now + d + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, now + d + 0.3);
       o.connect(g).connect(audioCtx.destination);
       o.start(now + d); o.stop(now + d + 0.32);
     });
   }
+  function buzz(pattern) {
+    if (!canVibrate || !cfg.vib) return;
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+  // 区間の終わりの知らせ（音と振動）。done: 時間になった・作業が終わった、back: 休憩が終わった
+  function notify(kind) {
+    if (kind === 'back') { chime(NOTES_BACK, 0.22); buzz(VIB_BACK); }
+    else { chime(NOTES_DONE); buzz(VIB_DONE); }
+  }
+
+  // 音量と振動の設定（実行中でも変えられる）。変えたら、その大きさの音・振動を一度だけ試しに出す
+  function renderPrefs() {
+    volBtns.forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.vol) === cfg.vol)));
+    vibBtns.forEach(b => b.setAttribute('aria-pressed', String((b.dataset.vib === '1') === cfg.vib)));
+    vibPref.hidden = !canVibrate;
+  }
+  prefsEl.addEventListener('click', e => {
+    const vol = e.target.closest('[data-vol]');
+    if (vol) {
+      cfg.vol = Number(vol.dataset.vol);
+      saveCfg(); renderPrefs();
+      initAudio(); chime([880]);
+      return;
+    }
+    const vib = e.target.closest('[data-vib]');
+    if (vib) {
+      cfg.vib = vib.dataset.vib === '1';
+      saveCfg(); renderPrefs();
+      buzz(VIB_DONE);
+    }
+  });
 
   // 実行中は画面のスリープを防ぐ（使えない環境では何もしない）
   async function requestWake() {
@@ -556,6 +646,8 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
     if (document.visibilityState === 'visible' && state === 'running') { requestWake(); tick(); }
   });
 
+  // ボタンを長押ししてもメニューを出さない（スマホ）
+  document.addEventListener('contextmenu', e => { if (e.target.closest && e.target.closest('button')) e.preventDefault(); });
   startBtn.addEventListener('click', () => state === 'running' ? pause() : start());
   resetBtn.addEventListener('click', reset);
   document.addEventListener('keydown', e => {
@@ -592,6 +684,7 @@ kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px 
 
   buildMeter();
   renderConfig();
+  renderPrefs();
   reset();
   // 画面の大きさが変わったら、メモリの本数を合わせ直す
   new ResizeObserver(() => { if (buildMeter()) render(); }).observe(meter);
