@@ -1,0 +1,601 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>ビジュアルタイマー</title><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='7' fill='%232c7a70'/%3E%3Cg fill='%23fff'%3E%3Crect x='5.5' y='7' width='5' height='18' rx='2.5'/%3E%3Crect x='13.5' y='7' width='5' height='18' rx='2.5'/%3E%3Crect x='21.5' y='7' width='5' height='18' rx='2.5' opacity='.35'/%3E%3C/g%3E%3C/svg%3E">
+<meta name="description" content="メモリが減っていく見た目で残り時間がわかるタイマー。作業と休憩の繰り返しにも使えます">
+<!-- スマホのホーム画面に追加して、アプリのように使うための設定 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ビジュアルタイマー">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" id="themeColor" content="#eef1f2">
+</head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@300;500&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
+<style>
+/* Layout: 1枚のパネルを中央に置き、上から メモリ → 残り時間 → ボタン の縦積み。その下に設定のバー */
+:root {
+  --bg: #eef1f2;
+  --panel: #ffffff;
+  --well: #e2e7e9;
+  --seg-on: #1e2a30;
+  --seg-off: #cfd7da;
+  --fg: #1e2a30;
+  --muted: #6b7a81;
+  --line: #d7dee1;
+  --accent: #2c7a70;
+  --accent-fg: #ffffff;
+  /* 休憩中のメモリ（増えていく） */
+  --rest-well: #dcebe8;
+  --rest-off: #c2d9d4;
+  --font-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --font-num: "Azeret Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /* サイズ可変: --u は「設計上の1px」。基準サイズ(幅560px)を1として、
+     ウィンドウの幅・高さのどちらにも収まる範囲で等倍拡大する。1px未満にはしない(=最小が基準サイズ) */
+  --base-w: 560;      /* 基準サイズの幅 */
+  --base-h: 519;      /* 基準サイズの高さ(ラベル〜ヒントまで) */
+  --side: 160px;      /* 左右に残す余白(縦長バナー1個分) */
+  --u: max(1px, min((100vw - var(--side) * 2) / var(--base-w), (100vh - 48px) / var(--base-h)));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101416; --panel: #181e21; --well: #0b0f11;
+    --seg-on: #e4ecef; --seg-off: #253035;
+    --fg: #e4ecef; --muted: #8c9ba1; --line: #283236;
+    --accent: #5fb3a7; --accent-fg: #0b1513;
+    --rest-well: #0c1a18; --rest-off: #1e3431;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101416; --panel: #181e21; --well: #0b0f11;
+  --seg-on: #e4ecef; --seg-off: #253035;
+  --fg: #e4ecef; --muted: #8c9ba1; --line: #283236;
+  --accent: #5fb3a7; --accent-fg: #0b1513;
+  --rest-well: #0c1a18; --rest-off: #1e3431;
+  color-scheme: dark;
+}
+html { height: 100%; }
+body {
+  min-height: 100%;
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-ui);
+  display: grid; place-items: center;
+  padding-inline: 16px; padding-block: 24px;
+  box-sizing: border-box;
+}
+.app { width: min(100%, calc(var(--base-w) * var(--u))); display: grid; gap: calc(14 * var(--u)); }
+.top { display: flex; justify-content: space-between; align-items: center; }
+.label { font-size: calc(12 * var(--u)); letter-spacing: .12em; color: var(--muted); font-weight: 700; }
+.theme-btn {
+  font: inherit; font-size: calc(12 * var(--u)); color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px;
+  padding: calc(5 * var(--u)) calc(12 * var(--u)); cursor: pointer;
+}
+.theme-btn:hover { color: var(--fg); }
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: calc(18 * var(--u));
+  padding: calc(22 * var(--u)); display: grid; gap: calc(20 * var(--u));
+}
+/* メモリ: 本数は画面の幅で決まり(JS)、減る速さは設定した時間で決まる */
+.meter {
+  background: var(--well); border-radius: calc(8 * var(--u));
+  padding: calc(10 * var(--u)); height: calc(92 * var(--u)); box-sizing: border-box;
+  display: flex; gap: calc(3 * var(--u));
+  transition: background-color .4s;
+}
+.seg { flex: 1 1 0; min-width: 0; background: var(--seg-on); border-radius: calc(1.5 * var(--u)); transition: background-color .3s, opacity .3s; }
+.seg.off { background: var(--seg-off); }
+/* 休憩中: 作業中と同じ見た目のまま、色を変えて左から増えていく */
+.meter.recover { background: var(--rest-well); }
+.meter.recover .seg { background: var(--accent); }
+.meter.recover .seg.off { background: var(--rest-off); }
+.scale {
+  display: flex; justify-content: space-between; align-items: baseline; margin-top: calc(-12 * var(--u));
+  font-family: var(--font-num); font-size: calc(11 * var(--u)); color: var(--muted);
+  padding-inline: calc(10 * var(--u));
+}
+.scale.rest { color: var(--accent); }
+.time {
+  text-align: center; font-family: var(--font-num); font-weight: 300;
+  font-size: clamp(56px, 17vw, calc(88 * var(--u))); line-height: 1; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  transition: color .4s;
+}
+.time.rest { color: var(--accent); }
+.status { text-align: center; font-size: calc(14 * var(--u)); color: var(--muted); min-height: 1.4em; margin-top: calc(-10 * var(--u)); }
+.status.hl { color: var(--accent); font-weight: 700; }
+.buttons { display: grid; grid-template-columns: 2fr 1fr; gap: calc(10 * var(--u)); }
+.btn {
+  font: inherit; font-size: calc(16 * var(--u)); font-weight: 700;
+  border-radius: calc(12 * var(--u)); padding: calc(14 * var(--u)); cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--fg);
+}
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn:hover { filter: brightness(1.06); }
+.btn:focus-visible, .theme-btn:focus-visible, .mode-btn:focus-visible, .step-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 設定: モード(通常／繰り返し)と時間。実行中はロックして、値と今の区間だけを見せる */
+.config {
+  margin: 0; min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: calc(10 * var(--u)) calc(14 * var(--u));
+  background: var(--panel); border: 1px solid var(--line); border-radius: calc(14 * var(--u));
+  padding: calc(10 * var(--u)) calc(12 * var(--u));
+}
+.modes { display: inline-flex; background: var(--well); border-radius: 999px; padding: calc(3 * var(--u)); }
+.mode-btn {
+  font: inherit; font-size: calc(13 * var(--u)); font-weight: 700; color: var(--muted);
+  background: none; border: 0; border-radius: 999px; cursor: pointer;
+  padding: calc(6 * var(--u)) calc(13 * var(--u));
+}
+.mode-btn[aria-pressed="true"] { background: var(--panel); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.fields { display: flex; gap: calc(10 * var(--u)); }
+.field {
+  display: flex; align-items: center; gap: calc(6 * var(--u));
+  padding: calc(2 * var(--u)) calc(2 * var(--u)) calc(2 * var(--u)) calc(8 * var(--u));
+  border-radius: calc(10 * var(--u)); transition: background-color .3s;
+}
+.field-label {
+  font-size: calc(13 * var(--u)); font-weight: 700; color: var(--muted);
+  display: inline-flex; align-items: center; gap: calc(5 * var(--u)); white-space: nowrap;
+}
+.tag {
+  font-family: var(--font-num); font-weight: 500; font-size: calc(11 * var(--u)); line-height: 1;
+  display: inline-grid; place-items: center; width: calc(18 * var(--u)); height: calc(18 * var(--u));
+  border-radius: calc(5 * var(--u)); background: var(--seg-on); color: var(--panel);
+}
+.field.rest .tag { background: var(--accent); color: var(--accent-fg); }
+.stepper {
+  display: inline-flex; align-items: center; min-height: calc(32 * var(--u));   /* ロックで −/+ を消しても高さを変えない */
+  border: 1px solid var(--line); border-radius: calc(10 * var(--u));
+}
+.stepper:focus-within { border-color: var(--accent); }
+.step-btn {
+  font: inherit; font-size: calc(17 * var(--u)); line-height: 1; color: var(--fg);
+  width: calc(30 * var(--u)); height: calc(32 * var(--u)); border: 0; border-radius: calc(9 * var(--u));
+  background: none; cursor: pointer;
+}
+.step-btn:hover { background: var(--well); }
+.num-in {
+  font-family: var(--font-num); font-size: calc(16 * var(--u)); color: var(--fg);
+  width: 3ch; text-align: center; border: 0; background: none; padding: 0; margin: 0; outline: none;
+  -moz-appearance: textfield; appearance: textfield;
+  opacity: 1; -webkit-text-fill-color: currentColor;
+}
+.num-in::-webkit-inner-spin-button, .num-in::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.unit { font-size: calc(12 * var(--u)); color: var(--muted); margin-left: calc(3 * var(--u)); }
+.config:disabled .step-btn { display: none; }
+.config:disabled .stepper { border-color: transparent; padding-inline: calc(4 * var(--u)); }
+.config:disabled .mode-btn { cursor: default; }
+.config:disabled .mode-btn[aria-pressed="false"] { opacity: .4; }
+.field.active { background: var(--well); }
+.field.active .field-label { color: var(--fg); }
+.field.rest.active { background: var(--rest-well); }
+.field.rest.active .field-label { color: var(--accent); }
+
+.hint { text-align: center; font-size: calc(12 * var(--u)); color: var(--muted); }
+.hint .keys + #lockNote::before { content: "　·　"; }
+button { touch-action: manipulation; }   /* 続けてタップしても拡大しない */
+/* タッチの端末(スマホなど)ではキーの案内を出さず、ロックの案内だけにする(行の高さは変えない) */
+@media (hover: none) and (pointer: coarse) {
+  .hint { min-height: 1.5em; line-height: 1.5; }
+  .hint .keys { display: none; }
+  .hint #lockNote::before { content: none; }
+}
+kbd { font-family: var(--font-num); font-size: calc(11 * var(--u)); border: 1px solid var(--line); border-radius: calc(4 * var(--u)); padding: calc(1 * var(--u)) calc(5 * var(--u)); }
+/* 1行に収まらない幅では、モードと時間を常に2段にする(ロックの有無で段数を変えない) */
+@media (max-width: 580px) {
+  .config { flex-direction: column; }
+  /* 狭い画面では、ロック中はキーの案内の代わりにロックの案内を出す(行数を変えない) */
+  .hint.locked .keys { display: none; }
+  .hint.locked #lockNote::before { content: none; }
+}
+@media (max-width: 420px) {
+  .panel { padding: 16px; }
+  .meter { height: 76px; padding: 8px; gap: 2px; }
+  .field { flex-direction: column; gap: 2px; padding: 4px 6px 2px; }
+}
+@media (prefers-reduced-motion: reduce) { .seg, .time, .meter, .field { transition: none; } }
+</style>
+
+<div class="app" id="app">
+  <div class="top">
+    <span class="label" id="label">VISUAL TIMER · 30 MIN</span>
+    <button class="theme-btn" id="themeBtn" type="button">ダーク表示</button>
+  </div>
+
+  <div class="panel">
+    <div class="meter" id="meter" role="progressbar" aria-label="残り時間" aria-valuemin="0" aria-valuemax="30" aria-valuenow="30"></div>
+    <div class="scale" id="scale" aria-hidden="true"><span>0</span><span id="scaleMid">15</span><span id="scaleEnd">30分</span></div>
+    <div class="time" id="time">30:00</div>
+    <div class="status" id="status" aria-live="polite">スタートで開始します</div>
+    <div class="buttons">
+      <button class="btn primary" id="startBtn" type="button">スタート</button>
+      <button class="btn" id="resetBtn" type="button">リセット</button>
+    </div>
+  </div>
+
+  <fieldset class="config" id="config" aria-label="タイマーの設定">
+    <div class="modes" role="group" aria-label="モード">
+      <button class="mode-btn" type="button" data-mode="single" aria-pressed="true">通常</button>
+      <button class="mode-btn" type="button" data-mode="repeat" aria-pressed="false">繰り返し</button>
+    </div>
+    <div class="fields">
+      <div class="field" data-show="single">
+        <label class="field-label" for="inSingle">時間</label>
+        <div class="stepper">
+          <button class="step-btn" type="button" data-key="single" data-dir="-1" aria-label="時間を減らす">−</button>
+          <input class="num-in" id="inSingle" data-key="single" type="number" inputmode="numeric" min="1" max="180" step="1" value="30">
+          <span class="unit">分</span>
+          <button class="step-btn" type="button" data-key="single" data-dir="1" aria-label="時間を増やす">+</button>
+        </div>
+      </div>
+      <div class="field" id="fieldA" data-show="repeat" hidden>
+        <label class="field-label" for="inA"><span class="tag">A</span>作業</label>
+        <div class="stepper">
+          <button class="step-btn" type="button" data-key="a" data-dir="-1" aria-label="作業の時間を減らす">−</button>
+          <input class="num-in" id="inA" data-key="a" type="number" inputmode="numeric" min="1" max="180" step="1" value="25">
+          <span class="unit">分</span>
+          <button class="step-btn" type="button" data-key="a" data-dir="1" aria-label="作業の時間を増やす">+</button>
+        </div>
+      </div>
+      <div class="field rest" id="fieldB" data-show="repeat" hidden>
+        <label class="field-label" for="inB"><span class="tag">B</span>休憩</label>
+        <div class="stepper">
+          <button class="step-btn" type="button" data-key="b" data-dir="-1" aria-label="休憩の時間を減らす">−</button>
+          <input class="num-in" id="inB" data-key="b" type="number" inputmode="numeric" min="1" max="180" step="1" value="5">
+          <span class="unit">分</span>
+          <button class="step-btn" type="button" data-key="b" data-dir="1" aria-label="休憩の時間を増やす">+</button>
+        </div>
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="hint" id="hint"><span class="keys"><kbd>Space</kbd> スタート／一時停止　<kbd>R</kbd> リセット</span><span id="lockNote" hidden>設定の変更はリセット後にできます</span></div>
+</div>
+
+<script>
+(() => {
+  const MIN_MIN = 1, MAX_MIN = 180;          // 設定できる時間（分）
+  // メモリの数は画面の大きさで決める（時間には関係しない。設定した時間で減る速さが変わる）。
+  // 基準サイズでは1本の間隔を約16.5px（30本）にし、拡大したときは間隔を√倍にして、大きい画面ほど本数を増やす
+  const BASE_W = 560, SEG_PITCH = 16.5, MIN_SEGS = 12, MAX_SEGS = 60;
+  const NOTES_DONE = [880, 880, 1046.5];     // 時間になった・作業が終わった
+  const NOTES_BACK = [659.3, 784, 987.8];    // 休憩が終わった（作業に戻る）
+  const CFG_KEY = 'visual-timer-settings', THEME_KEY = 'visual-timer-theme', OLD_THEME_KEY = 'pomo-theme';
+
+  const $ = id => document.getElementById(id);
+  const appEl = $('app'), meter = $('meter'), timeEl = $('time'), statusEl = $('status');
+  const scaleEl = $('scale'), scaleMid = $('scaleMid'), scaleEnd = $('scaleEnd');
+  const startBtn = $('startBtn'), resetBtn = $('resetBtn'), themeBtn = $('themeBtn');
+  const labelEl = $('label'), config = $('config'), hintEl = $('hint'), lockNote = $('lockNote');
+  const fieldA = $('fieldA'), fieldB = $('fieldB');
+  const inputs = { single: $('inSingle'), a: $('inA'), b: $('inB') };
+  const modeBtns = [...document.querySelectorAll('.mode-btn')];
+
+  // 設定（mode: single = 通常、repeat = A（作業）と B（休憩）の繰り返し）
+  const cfg = loadCfg();
+
+  // 実行状態
+  let state = 'idle';                 // idle | running | paused | done
+  let phase = 'single';               // single | a | b
+  let cycle = 1;                      // 繰り返しの何回目か
+  let total = 0, remaining = 0, endAt = 0, timer = null, halfShown = false;
+  let segs = [];
+  let audioCtx = null, wakeLock = null;
+
+  const clampMin = v => Math.min(MAX_MIN, Math.max(MIN_MIN, Math.round(v)));
+  const fmt = ms => {
+    const t = Math.ceil(ms / 1000);
+    return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+  };
+  const phaseMin = p => p === 'b' ? cfg.b : p === 'a' ? cfg.a : cfg.single;
+
+  // メモリの数を、メーターの幅から決める
+  function segCount() {
+    const cs = getComputedStyle(meter);
+    const w = meter.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const u = Math.max(1, appEl.getBoundingClientRect().width / BASE_W);   // 拡大率（CSS の --u）
+    return Math.min(MAX_SEGS, Math.max(MIN_SEGS, Math.round(w / (SEG_PITCH * Math.sqrt(u)))));
+  }
+  // メモリを作る（本数が変わったときだけ作り直す）
+  function buildMeter() {
+    const n = segCount();
+    if (n === segs.length) return false;
+    meter.textContent = '';
+    segs = [];
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement('div');
+      s.className = 'seg';
+      meter.appendChild(s);
+      segs.push(s);
+    }
+    return true;
+  }
+
+  function setStatus(text, hl) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('hl', !!hl);
+  }
+  function runningStatus() {
+    const pre = cfg.mode === 'repeat' ? cycle + '回目 · ' : '';
+    if (phase === 'b') setStatus(pre + '休憩しましょう', true);
+    else if (halfShown) setStatus(pre + 'あと半分！', true);
+    else setStatus(pre + '集中しています');
+  }
+
+  // level: 点いている割合（0〜1）。作業中は右から減り、休憩中は同じ見た目のまま逆向きに増える
+  function renderMeter(level) {
+    const n = level * segs.length;
+    const full = Math.floor(n + 1e-9);          // 完全に点いているメモリ数
+    const frac = n - full;                      // 途中のメモリの点いている割合
+    segs.forEach((s, i) => {
+      if (i < full) { s.classList.remove('off'); s.style.opacity = 1; }
+      else if (i === full && frac > 1e-9) { s.classList.remove('off'); s.style.opacity = 0.25 + 0.75 * frac; }
+      else { s.classList.add('off'); s.style.opacity = 1; }
+    });
+  }
+
+  function render() {
+    const rest = phase === 'b';
+    meter.classList.toggle('recover', rest);
+    renderMeter(rest ? 1 - remaining / total : remaining / total);
+    const txt = fmt(remaining);
+    timeEl.textContent = txt;
+    timeEl.classList.toggle('rest', rest);
+    meter.setAttribute('aria-label', rest ? '休憩の残り時間' : '残り時間');
+    meter.setAttribute('aria-valuemax', phaseMin(phase));
+    meter.setAttribute('aria-valuenow', Math.ceil(remaining / 60000));
+    const tag = phase === 'a' ? '作業 ' : rest ? '休憩 ' : '';
+    document.title = state === 'running' ? tag + txt + ' · ビジュアルタイマー' : 'ビジュアルタイマー';
+  }
+  // 目盛り: 0・半分・今の区間の長さ
+  function renderScale() {
+    const min = phaseMin(phase), half = min / 2;
+    scaleEl.classList.toggle('rest', phase === 'b');
+    scaleMid.textContent = Number.isInteger(half) ? half : half.toFixed(1);
+    scaleEnd.textContent = min + '分';
+  }
+  // 繰り返しの実行中は、今の区間（A か B）を設定のバーで強調する
+  function renderFields() {
+    const on = cfg.mode === 'repeat' && (state === 'running' || state === 'paused');
+    fieldA.classList.toggle('active', on && phase === 'a');
+    fieldB.classList.toggle('active', on && phase === 'b');
+  }
+  function renderConfig() {
+    modeBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === cfg.mode)));
+    document.querySelectorAll('[data-show]').forEach(el => { el.hidden = el.dataset.show !== cfg.mode; });
+    for (const k in inputs) {
+      if (document.activeElement !== inputs[k]) inputs[k].value = cfg[k];
+      fitInput(inputs[k]);
+    }
+    labelEl.textContent = 'VISUAL TIMER · ' + (cfg.mode === 'repeat' ? cfg.a + ' / ' + cfg.b : cfg.single) + ' MIN';
+  }
+
+  // 入力欄の幅を桁数に合わせる（ロック中に値だけを詰めて見せるため）
+  const fitInput = el => { el.style.width = Math.min(3, Math.max(2, el.value.length)) + 'ch'; };
+
+  function enterPhase(p) {
+    phase = p;
+    total = phaseMin(p) * 60000;
+    halfShown = false;
+    renderScale();
+    renderFields();
+  }
+
+  function tick() {
+    const now = Date.now();
+    if (cfg.mode === 'repeat' && endAt <= now) {
+      // 区間の切り替え。タブが眠っていて何区間か過ぎていても、終わるはずだった時刻から数えて進める
+      while (endAt <= now) {
+        if (phase === 'b') cycle++;
+        enterPhase(phase === 'a' ? 'b' : 'a');
+        endAt += total;
+      }
+      if (phase === 'b') chime(NOTES_DONE);
+      else chime(NOTES_BACK, 0.22);
+      runningStatus();
+    }
+    remaining = Math.max(0, endAt - now);
+    if (phase !== 'b' && !halfShown && remaining <= total / 2 && remaining > 0) {
+      halfShown = true;
+      runningStatus();
+    }
+    render();
+    if (remaining === 0) finish();
+  }
+
+  function start() {
+    if (state === 'done') { remaining = total; halfShown = false; }
+    state = 'running';
+    endAt = Date.now() + remaining;
+    clearInterval(timer);
+    timer = setInterval(tick, 200);
+    startBtn.textContent = '一時停止';
+    lock(true);
+    runningStatus();
+    initAudio();
+    requestWake();
+    tick();
+  }
+
+  function pause() {
+    state = 'paused';
+    clearInterval(timer);
+    remaining = Math.max(0, endAt - Date.now());
+    startBtn.textContent = '再開';
+    setStatus((cfg.mode === 'repeat' ? cycle + '回目 · ' : '') + '一時停止中');
+    releaseWake();
+    render();
+  }
+
+  function reset() {
+    state = 'idle';
+    clearInterval(timer);
+    cycle = 1;
+    enterPhase(cfg.mode === 'repeat' ? 'a' : 'single');
+    remaining = total;
+    startBtn.textContent = 'スタート';
+    setStatus(cfg.mode === 'repeat' ? 'スタートで A（作業）から始めます' : 'スタートで開始します');
+    lock(false);
+    releaseWake();
+    render();
+  }
+
+  // 通常モードで時間になったとき（繰り返しモードは止まらない）
+  function finish() {
+    state = 'done';
+    clearInterval(timer);
+    startBtn.textContent = 'もう一度';
+    setStatus('時間になりました。おつかれさまでした', true);
+    document.title = '完了 · ビジュアルタイマー';
+    lock(false);
+    releaseWake();
+    chime(NOTES_DONE);
+  }
+
+  // 実行中・一時停止中は設定を変えられない（リセットか終了で戻る）
+  function lock(on) {
+    config.disabled = on;
+    config.title = on ? '実行中は変更できません（リセットすると変更できます）' : '';
+    lockNote.hidden = !on;
+    hintEl.classList.toggle('locked', on);
+    renderFields();
+  }
+
+  // 設定を変えたら、最初の状態に戻す
+  function applySettings() {
+    saveCfg();
+    renderConfig();
+    reset();
+  }
+  function setValue(key, v) {
+    if (cfg[key] === v) return;
+    cfg[key] = v;
+    applySettings();
+  }
+  // −／+: 10分までは1分きざみ、それより上は5分きざみ（5の倍数にそろえる）
+  function stepValue(v, dir) {
+    if (dir > 0) return clampMin(v < 10 ? v + 1 : Math.floor(v / 5) * 5 + 5);
+    return clampMin(v <= 10 ? v - 1 : Math.ceil(v / 5) * 5 - 5);
+  }
+  config.addEventListener('click', e => {
+    const step = e.target.closest('.step-btn');
+    if (step) { setValue(step.dataset.key, stepValue(cfg[step.dataset.key], Number(step.dataset.dir))); return; }
+    const mode = e.target.closest('.mode-btn');
+    if (mode && mode.dataset.mode !== cfg.mode) { cfg.mode = mode.dataset.mode; applySettings(); }
+  });
+  for (const [k, el] of Object.entries(inputs)) {
+    // 入力の途中でも、範囲内の整数になったら反映する
+    el.addEventListener('input', () => {
+      fitInput(el);
+      const v = Number(el.value);
+      if (el.value !== '' && Number.isInteger(v) && v >= MIN_MIN && v <= MAX_MIN) setValue(k, v);
+    });
+    // 確定したら範囲に収める（空や不正な値は元に戻す）
+    el.addEventListener('change', () => {
+      const v = Number(el.value);
+      if (el.value !== '' && Number.isFinite(v)) setValue(k, clampMin(v));
+      el.value = cfg[k];
+      fitInput(el);
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); });
+  }
+
+  function loadCfg() {
+    const d = { mode: 'single', single: 30, a: 25, b: 5 };
+    try {
+      const s = JSON.parse(localStorage.getItem(CFG_KEY) || 'null');
+      if (s && typeof s === 'object') {
+        if (s.mode === 'single' || s.mode === 'repeat') d.mode = s.mode;
+        for (const k of ['single', 'a', 'b']) {
+          if (Number.isInteger(s[k]) && s[k] >= MIN_MIN && s[k] <= MAX_MIN) d[k] = s[k];
+        }
+      }
+    } catch (e) {}
+    return d;
+  }
+  function saveCfg() {
+    try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {}
+  }
+
+  // 終了音（ボタン操作時に音声を有効化しておく）
+  function initAudio() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) { audioCtx = null; }
+  }
+  function chime(notes, gap = 0.35) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    notes.forEach((f, i) => {
+      const d = i * gap;
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + d);
+      g.gain.exponentialRampToValueAtTime(0.25, now + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + d + 0.3);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(now + d); o.stop(now + d + 0.32);
+    });
+  }
+
+  // 実行中は画面のスリープを防ぐ（使えない環境では何もしない）
+  async function requestWake() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+  function releaseWake() {
+    try { if (wakeLock) wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state === 'running') { requestWake(); tick(); }
+  });
+
+  startBtn.addEventListener('click', () => state === 'running' ? pause() : start());
+  resetBtn.addEventListener('click', reset);
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input')) return;
+    if (e.target.closest && e.target.closest('button') && (e.code === 'Space' || e.code === 'Enter')) return;
+    if (e.code === 'Space') { e.preventDefault(); state === 'running' ? pause() : start(); }
+    else if (e.key === 'r' || e.key === 'R') reset();
+  });
+
+  // テーマ切替（白基調 / ダーク基調）
+  const root = document.documentElement;
+  const isDark = () => root.dataset.theme
+    ? root.dataset.theme === 'dark'
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const themeMeta = $('themeColor');
+  function syncTheme() {
+    themeBtn.textContent = isDark() ? 'ライト表示' : 'ダーク表示';
+    // スマホのステータスバーなどの色を背景に合わせる
+    themeMeta.content = getComputedStyle(root).getPropertyValue('--bg').trim();
+  }
+  try {
+    // 旧名（ポモドーロ）のときの保存値も引き継ぐ
+    const saved = localStorage.getItem(THEME_KEY) || localStorage.getItem(OLD_THEME_KEY);
+    if (saved === 'dark' || saved === 'light') root.dataset.theme = saved;
+  } catch (e) {}
+  themeBtn.addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); localStorage.removeItem(OLD_THEME_KEY); } catch (e) {}
+    syncTheme();
+  });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+  syncTheme();
+
+  buildMeter();
+  renderConfig();
+  reset();
+  // 画面の大きさが変わったら、メモリの本数を合わせ直す
+  new ResizeObserver(() => { if (buildMeter()) render(); }).observe(meter);
+})();
+</script>
+
+</body></html>
