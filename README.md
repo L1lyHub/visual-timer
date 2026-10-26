@@ -26,15 +26,12 @@ https://l1lyhub.github.io/visual-timer/
 - iPhone は消音モードのときは音が鳴らない
 - 振動は Android などで使える。iPhone のブラウザは Web ページから振動させられないため、振動の設定は出ない
 
-## ファイル
+## AI を使って作っています
 
-| ファイル | 内容 |
-|---|---|
-| `index.html` | アプリ本体（HTML・CSS・JavaScript をこの 1 枚にまとめている） |
-| `manifest.webmanifest` | ホーム画面に追加したときの名前・アイコン・表示のしかた |
-| `icons/` | ホーム画面用のアイコン |
-| `.nojekyll` | GitHub Pages でファイルをそのまま公開するための空ファイル |
+このアプリは、Anthropic の AI「Claude Code」を使って作りました。
 
-## GitHub Pages で公開する
+## 免責事項
 
-リポジトリの Settings → Pages で、Source を「Deploy from a branch」、Branch を `main` と `/ (root)` にして Save。数分で上の URL で開けるようになる。
+- 無料で公開しているもので、動作や時間の正確さは保証しません
+- 使ったことで起きた損害について、作者は責任を負いません
+- 端末やブラウザの設定によっては、音や振動が出ないことがあります。寝過ごすと困る用事など、大事な用途には使わないでください
